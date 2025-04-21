@@ -1,0 +1,122 @@
+-- Create Database
+CREATE DATABASE IF NOT EXISTS venue_booking_system;
+USE venue_booking_system;
+
+-- Role Table
+CREATE TABLE Role (
+    RoleID INT PRIMARY KEY AUTO_INCREMENT,
+    RoleName ENUM('Admin', 'User', 'Manager') NOT NULL
+);
+
+-- User Table
+CREATE TABLE IF NOT EXISTS User (
+    UserID INT PRIMARY KEY AUTO_INCREMENT,
+    Name VARCHAR(100) NOT NULL,
+    Phone VARCHAR(20) NOT NULL,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    Password VARCHAR(255) NOT NULL,
+    DateOfBirth DATE NOT NULL,
+    RoleID INT,
+    Status ENUM('Active', 'Banned') DEFAULT 'Active',
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (RoleID) REFERENCES Role(RoleID) ON DELETE CASCADE
+);
+
+
+
+
+-- Venue Table
+CREATE TABLE Venue (
+    VenueID INT PRIMARY KEY AUTO_INCREMENT,
+    ManagerID INT,
+    Name VARCHAR(100) NOT NULL,
+    Location VARCHAR(255) NOT NULL,
+    SportType ENUM('Хөлбөмбөг', 'Сагсанбөмбөг', 'Волейбол', 'Ширээний теннис', 'Бадминтон', 'Талбайн теннис', 'Гольф', 'Бүжиг', 'Иога', 'Билльярд') NOT NULL,
+    HourlyPrice DECIMAL(10, 2) NOT NULL,
+    Description TEXT,
+    MapLocation VARCHAR(255),
+    FOREIGN KEY (ManagerID) REFERENCES User(UserID) ON DELETE CASCADE
+);
+
+
+-- VenueImages Table
+CREATE TABLE VenueImages (
+    ImageID INT PRIMARY KEY AUTO_INCREMENT,
+    VenueID INT,
+    ImagePath VARCHAR(255) NOT NULL,
+    FOREIGN KEY (VenueID) REFERENCES Venue(VenueID) ON DELETE CASCADE
+);
+
+-- VenueTimeSlot Table
+CREATE TABLE VenueTimeSlot (
+    SlotID INT PRIMARY KEY AUTO_INCREMENT,
+    VenueID INT,
+    Week INT NOT NULL,
+    DayOfWeek ENUM('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday') NOT NULL,
+    StartTime TIME NOT NULL,
+    EndTime TIME NOT NULL,
+    Status ENUM('Available', 'Booked') DEFAULT 'Available',
+    Price DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (VenueID) REFERENCES Venue(VenueID) ON DELETE CASCADE
+);
+
+-- Booking Table
+CREATE TABLE Booking (
+    BookingID INT PRIMARY KEY AUTO_INCREMENT,
+    UserID INT,
+    VenueID INT,
+    SlotID INT,
+    BookingDate DATE NOT NULL,
+    Duration INT NOT NULL,  -- Duration in hours
+    Status ENUM('Pending', 'Confirmed', 'Canceled') NOT NULL DEFAULT 'Pending',
+    FOREIGN KEY (UserID) REFERENCES User(UserID) ON DELETE CASCADE,
+    FOREIGN KEY (VenueID) REFERENCES Venue(VenueID) ON DELETE CASCADE,
+    FOREIGN KEY (SlotID) REFERENCES VenueTimeSlot(SlotID) ON DELETE CASCADE
+);
+
+-- Payment Table
+CREATE TABLE Payment (
+    PaymentID INT PRIMARY KEY AUTO_INCREMENT,
+    BookingID INT,
+    Amount DECIMAL(10, 2) NOT NULL,
+    PaymentDate DATE NOT NULL,
+    Status ENUM('Paid', 'Pending') NOT NULL,
+    FOREIGN KEY (BookingID) REFERENCES Booking(BookingID) ON DELETE CASCADE
+);
+CREATE TABLE PromotionRequest (
+    RequestID INT AUTO_INCREMENT PRIMARY KEY,
+    UserID INT NOT NULL,
+    Name VARCHAR(100) NOT NULL,
+    Email VARCHAR(255) NOT NULL,
+    PhoneNumber VARCHAR(20) NOT NULL,
+    PhoneNumber2 VARCHAR(20),
+    VenueName VARCHAR(100) NOT NULL,
+    VenueLocation VARCHAR(255) NOT NULL,
+    VenuePrice DECIMAL(10, 2) NOT NULL,
+    TimeSlots TEXT NOT NULL,
+    Description TEXT,
+    Images TEXT,
+    RequestStatus ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    RequestDate TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (UserID) REFERENCES User(UserID) ON DELETE CASCADE
+);
+CREATE TABLE Notifications (
+    NotificationID INT(11) AUTO_INCREMENT PRIMARY KEY,
+    UserID INT(11) NOT NULL,
+    Title VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    Message TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    Date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    NotificationTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    IsRead TINYINT(1) DEFAULT 0,
+    CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (UserID) REFERENCES User(UserID)
+);
+CREATE TABLE VenueSports (
+    ID INT AUTO_INCREMENT PRIMARY KEY,
+    VenueID INT,
+    SportType ENUM('Хөлбөмбөг', 'Сагсанбөмбөг', 'Волейбол', 'Ширээний теннис', 'Бадминтон', 'Талбайн теннис', 'Гольф', 'Бүжиг', 'Иога', 'Билльярд') NOT NULL,
+    FOREIGN KEY (VenueID) REFERENCES Venue(VenueID) ON DELETE CASCADE,
+    UNIQUE KEY unique_venue_sport (VenueID, SportType)
+);
+-- Sample Data for Roles
+INSERT INTO Role (RoleName) VALUES ('Admin'), ('User'), ('Manager');
