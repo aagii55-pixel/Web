@@ -36,7 +36,7 @@ function sanitizeInput($input) {
     return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
 }
 
-// Fetch pending requests count (this was missing in the original)
+// Fetch pending requests count
 $pendingCountStmt = $conn->prepare("SELECT COUNT(*) as count FROM PromotionRequest WHERE RequestStatus = 'Pending'");
 $pendingCountStmt->execute();
 $pendingCountResult = $pendingCountStmt->get_result();
@@ -82,17 +82,17 @@ if (isset($_GET['action'], $_GET['requestId'], $_GET['csrf_token'])) {
     $action = filter_input(INPUT_GET, 'action', FILTER_SANITIZE_STRING);
 
     if ($requestId && in_array($action, ['approve', 'reject'])) {
-        // Fetch user details securely
-        $userStmt = $conn->prepare("SELECT UserID, Name, Email FROM PromotionRequest WHERE RequestID = ?");
-        $userStmt->bind_param("i", $requestId);
-        $userStmt->execute();
-        $userResult = $userStmt->get_result();
-        $user = $userResult->fetch_assoc();
-        $userStmt->close();
+        // Fetch promotion request and user details securely
+        $requestStmt = $conn->prepare("SELECT UserID, Name, Email, VenueName, VenueLocation, VenuePrice, Description FROM PromotionRequest WHERE RequestID = ?");
+        $requestStmt->bind_param("i", $requestId);
+        $requestStmt->execute();
+        $requestResult = $requestStmt->get_result();
+        $requestData = $requestResult->fetch_assoc();
+        $requestStmt->close();
 
-        if ($user) {
-            $userId = $user['UserID'];
-
+        if ($requestData) {
+            $userId = $requestData['UserID'];
+            
             // Use transactions for data integrity
             $conn->begin_transaction();
 
@@ -102,19 +102,24 @@ if (isset($_GET['action'], $_GET['requestId'], $_GET['csrf_token'])) {
                     $approveStmt = $conn->prepare("UPDATE PromotionRequest SET RequestStatus = 'Approved' WHERE RequestID = ?");
                     $approveStmt->bind_param("i", $requestId);
                     $approveStmt->execute();
+                    $approveStmt->close();
 
-                    // Insert venue with prepared statement
-                    $venueStmt = $conn->prepare("INSERT INTO Venue (Name, Location, Price, Description) 
-                        SELECT VenueName, VenueLocation, VenuePrice, Description 
-                        FROM PromotionRequest 
-                        WHERE RequestID = ?");
-                    $venueStmt->bind_param("i", $requestId);
+                    // Get default sport type (first one from enum list, for example)
+                    $defaultSportType = 'Хөлбөмбөг'; // Default sport type
+
+                    // Insert venue with prepared statement - FIXED to match venue table structure
+                    $venueStmt = $conn->prepare("INSERT INTO Venue (ManagerID, Name, Location, SportType, HourlyPrice, Description) 
+                        VALUES (?, ?, ?, ?, ?, ?)");
+                    $venueStmt->bind_param("isssds", $userId, $requestData['VenueName'], $requestData['VenueLocation'], $defaultSportType, $requestData['VenuePrice'], $requestData['Description']);
                     $venueStmt->execute();
+                    $venueId = $conn->insert_id;
+                    $venueStmt->close();
 
                     // Notify user
                     $notifyStmt = $conn->prepare("INSERT INTO Notifications (UserID, Title, Message) VALUES (?, 'Танхим нэмэх хүсэлт батлагдсан', 'Таны танхим нэмэх хүсэлт зөвшөөрөгдлөө.')");
                     $notifyStmt->bind_param("i", $userId);
                     $notifyStmt->execute();
+                    $notifyStmt->close();
 
                     $message = "Хүсэлт амжилттай зөвшөөрөгдсөн!";
                 } elseif ($action === 'reject') {
@@ -122,11 +127,13 @@ if (isset($_GET['action'], $_GET['requestId'], $_GET['csrf_token'])) {
                     $rejectStmt = $conn->prepare("UPDATE PromotionRequest SET RequestStatus = 'Rejected' WHERE RequestID = ?");
                     $rejectStmt->bind_param("i", $requestId);
                     $rejectStmt->execute();
+                    $rejectStmt->close();
 
                     // Notify user
                     $notifyStmt = $conn->prepare("INSERT INTO Notifications (UserID, Title, Message) VALUES (?, 'Танхим нэмэх хүсэлт татгалзсан', 'Таны танхим нэмэх хүсэлт татгалзагдлаа.')");
                     $notifyStmt->bind_param("i", $userId);
                     $notifyStmt->execute();
+                    $notifyStmt->close();
 
                     $message = "Хүсэлт амжилттай татгалзсан!";
                 }
@@ -140,6 +147,7 @@ if (isset($_GET['action'], $_GET['requestId'], $_GET['csrf_token'])) {
         }
     }
 }
+
 if (isset($_GET['logout'])) {
     session_destroy();
     header('Location: ../a/logout.php');
@@ -256,6 +264,7 @@ if (isset($_GET['logout'])) {
                                 <?php if ($row['RequestStatus'] == 'Pending'): ?>
                                     <a href="?action=approve&requestId=<?php echo $row['RequestID']; ?>&csrf_token=<?php echo $_SESSION['csrf_token']; ?>" 
                                        class="text-green-600 hover:text-green-800 mr-2">Зөвшөөрөх</a>
+
                                     <a href="?action=reject&requestId=<?php echo $row['RequestID']; ?>&csrf_token=<?php echo $_SESSION['csrf_token']; ?>" 
                                        class="text-red-600 hover:text-red-800">Татгалзах</a>
                                 <?php else: ?>
@@ -389,4 +398,4 @@ if (isset($_GET['logout'])) {
 <?php
 // Close database connection
 $conn->close();
-?>
+?>=
