@@ -98,25 +98,54 @@ if (isset($_GET['action'], $_GET['requestId'], $_GET['csrf_token'])) {
 
             try {
                 if ($action === 'approve') {
-                    // Approve request with prepared statement
+                    // 1. Get the Manager role ID
+                    $roleStmt = $conn->prepare("SELECT RoleID FROM Role WHERE RoleName = 'Manager'");
+                    $roleStmt->execute();
+                    $roleResult = $roleStmt->get_result();
+                    $roleData = $roleResult->fetch_assoc();
+                    $roleStmt->close();
+                    
+                    if (!$roleData) {
+                        // If Manager role doesn't exist, create it
+                        $createRoleStmt = $conn->prepare("INSERT INTO Role (RoleName) VALUES ('Manager')");
+                        $createRoleStmt->execute();
+                        $managerRoleId = $conn->insert_id;
+                        $createRoleStmt->close();
+                    } else {
+                        $managerRoleId = $roleData['RoleID'];
+                    }
+
+                    // 2. Update user role to Manager
+                    $updateUserStmt = $conn->prepare("UPDATE User SET RoleID = ? WHERE UserID = ?");
+                    $updateUserStmt->bind_param("ii", $managerRoleId, $userId);
+                    $updateUserStmt->execute();
+                    $updateUserStmt->close();
+
+                    // 3. Approve request with prepared statement
                     $approveStmt = $conn->prepare("UPDATE PromotionRequest SET RequestStatus = 'Approved' WHERE RequestID = ?");
                     $approveStmt->bind_param("i", $requestId);
                     $approveStmt->execute();
                     $approveStmt->close();
 
-                    // Get default sport type (first one from enum list, for example)
+                    // 4. Get default sport type (first one from enum list, for example)
                     $defaultSportType = 'Хөлбөмбөг'; // Default sport type
 
-                    // Insert venue with prepared statement - FIXED to match venue table structure
+                    // 5. Insert venue with prepared statement - FIXED to match venue table structure
                     $venueStmt = $conn->prepare("INSERT INTO Venue (ManagerID, Name, Location, SportType, HourlyPrice, Description) 
                         VALUES (?, ?, ?, ?, ?, ?)");
                     $venueStmt->bind_param("isssds", $userId, $requestData['VenueName'], $requestData['VenueLocation'], $defaultSportType, $requestData['VenuePrice'], $requestData['Description']);
                     $venueStmt->execute();
                     $venueId = $conn->insert_id;
                     $venueStmt->close();
+                    
+                    // 6. Update the user's VenueID field to associate them with the venue
+                    $linkUserToVenueStmt = $conn->prepare("UPDATE User SET VenueID = ? WHERE UserID = ?");
+                    $linkUserToVenueStmt->bind_param("ii", $venueId, $userId);
+                    $linkUserToVenueStmt->execute();
+                    $linkUserToVenueStmt->close();
 
-                    // Notify user
-                    $notifyStmt = $conn->prepare("INSERT INTO Notifications (UserID, Title, Message) VALUES (?, 'Танхим нэмэх хүсэлт батлагдсан', 'Таны танхим нэмэх хүсэлт зөвшөөрөгдлөө.')");
+                    // 7. Notify user
+                    $notifyStmt = $conn->prepare("INSERT INTO Notifications (UserID, Title, Message) VALUES (?, 'Танхим нэмэх хүсэлт батлагдсан', 'Таны танхим нэмэх хүсэлт зөвшөөрөгдлөө. Та одоо менежер болсон байна.')");
                     $notifyStmt->bind_param("i", $userId);
                     $notifyStmt->execute();
                     $notifyStmt->close();
@@ -398,4 +427,4 @@ if (isset($_GET['logout'])) {
 <?php
 // Close database connection
 $conn->close();
-?>=
+?>
