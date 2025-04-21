@@ -9,7 +9,7 @@ function ensureManagerAccess() {
         exit();
     }
 }
-
+//fdsfddssdfaffsda
 ensureManagerAccess();
 $manager_id = $_SESSION['user_id'];
 
