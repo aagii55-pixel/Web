@@ -249,11 +249,11 @@ if ($selected_venue) {
         $venue_images[] = 'uploads/venue_images/default.jpg';
     }
 
-    // Fetch available slots
+    // FIXED: Fetch ALL slots, not just available ones
     $slots_stmt = $conn->prepare("
         SELECT SlotID, DayOfWeek, StartTime, EndTime, Price, Status 
         FROM VenueTimeSlot 
-        WHERE VenueID = ? AND Status = 'Available' 
+        WHERE VenueID = ? 
         ORDER BY FIELD(DayOfWeek, 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'), StartTime
     ");
     $slots_stmt->bind_param("i", $selected_venue);
@@ -532,94 +532,102 @@ $isManagerViewingAsUser = isset($_SESSION['original_role']) && $_SESSION['origin
                     </script>
 
                     <!-- Booking Slots Section -->
-                   <!-- Booking Slots Section -->
-<div class="p-8 bg-gray-50 border-t">
-    <?php if ($slots && $slots->num_rows > 0): ?>
-        <form method="POST" id="booking-form">
-            <input type="hidden" name="venue_id" value="<?= $selected_venue ?>">
-            
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">Захиалах боломжтой цагууд</h2>
+                    <div class="p-8 bg-gray-50 border-t">
+                        <?php if ($slots && $slots->num_rows > 0): ?>
+                            <form method="POST" id="booking-form">
+                                <input type="hidden" name="venue_id" value="<?= $selected_venue ?>">
+                                
+                                <h2 class="text-2xl font-bold mb-6 text-gray-800">Захиалах боломжтой цагууд</h2>
 
-            <div class="overflow-x-auto">
-                <table class="w-full bg-white border rounded-lg shadow-sm">
-                    <thead>
-                        <tr class="bg-gray-100 text-gray-600 uppercase text-sm">
-                            <th class="p-3 text-left">Цаг</th>
-                            <?php foreach ($week_dates as $week_date): ?>
-                                <th class="p-3 text-center">
-                                    <?= date('D, d/m', strtotime($week_date['date'])) ?>
-                                </th>
-                            <?php endforeach; ?>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php 
-                        $timeslots_by_time = [];
-                        $slots->data_seek(0);
-                        while ($slot = $slots->fetch_assoc()) {
-                            $timeslots_by_time[$slot['StartTime']][] = $slot;
-                        }
+                                <div class="overflow-x-auto">
+                                    <table class="w-full bg-white border rounded-lg shadow-sm">
+                                        <thead>
+                                            <tr class="bg-gray-100 text-gray-600 uppercase text-sm">
+                                                <th class="p-3 text-left">Цаг</th>
+                                                <?php foreach ($week_dates as $week_date): ?>
+                                                    <th class="p-3 text-center">
+                                                        <?= date('D, d/m', strtotime($week_date['date'])) ?>
+                                                    </th>
+                                                <?php endforeach; ?>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            $timeslots_by_time = [];
+                                            $slots->data_seek(0);
+                                            while ($slot = $slots->fetch_assoc()) {
+                                                $timeslots_by_time[$slot['StartTime']][] = $slot;
+                                            }
 
-                        // Get current date and time for comparison
-                        $current_date_time = new DateTime();
+                                            // Get current date and time for comparison
+                                            $current_date_time = new DateTime();
 
-                        foreach ($timeslots_by_time as $start_time => $slots_group) {
-                            echo "<tr>";
-                            echo "<td class='p-3 border-b font-medium'>" . date('H:i', strtotime($start_time)) . "</td>";
+                                            foreach ($timeslots_by_time as $start_time => $slots_group) {
+                                                echo "<tr>";
+                                                echo "<td class='p-3 border-b font-medium'>" . date('H:i', strtotime($start_time)) . "</td>";
 
-                            foreach ($week_dates as $week_date) {
-                                $slot_found = false;
-                                foreach ($slots_group as $slot) {
-                                    if ($slot['DayOfWeek'] == $week_date['day']) {
-                                        $slot_found = true;
-                                        $slot_id = $slot['SlotID'];
-                                        $price = $slot['Price'];
-                                        
-                                        // Create DateTime for the slot
-                                        $slot_datetime = new DateTime($week_date['date'] . ' ' . $slot['StartTime']);
-                                        
-                                        // Check if slot is in the past
-                                        if ($slot_datetime <= $current_date_time) {
-                                            // Display as finished
-                                            echo "<td class='p-3 border-b text-center'>
-                                                    <span class='px-3 py-1 rounded bg-gray-200 text-gray-500 text-sm'>
-                                                        Дууссан
-                                                    </span>
-                                                </td>";
-                                        } else {
-                                            // Available slot
-                                            echo "<td class='p-3 border-b text-center'>
-                                                    <label class='inline-flex items-center cursor-pointer'>
-                                                        <input type='checkbox' 
-                                                               name='selected_slots[]' 
-                                                               value='$slot_id' 
-                                                               class='slot-checkbox hidden'
-                                                               onchange='updateSlotSelection(this, $price)'>
-                                                        <span class='slot-label px-3 py-1 rounded 
-                                                                    hover:bg-blue-100 
-                                                                    transition duration-200 
-                                                                    text-sm font-medium'>
-                                                            " . number_format($price) . " ₮
-                                                        </span>
-                                                    </label>
-                                                </td>";
-                                        }
-                                        break;
-                                    }
-                                }
+                                                foreach ($week_dates as $week_date) {
+                                                    $slot_found = false;
+                                                    foreach ($slots_group as $slot) {
+                                                        if ($slot['DayOfWeek'] == $week_date['day']) {
+                                                            $slot_found = true;
+                                                            $slot_id = $slot['SlotID'];
+                                                            $price = $slot['Price'];
+                                                            $status = $slot['Status'];
+                                                            
+                                                            // Create DateTime for the slot
+                                                            $slot_datetime = new DateTime($week_date['date'] . ' ' . $slot['StartTime']);
+                                                            
+                                                            // Check if slot is in the past
+                                                            if ($slot_datetime <= $current_date_time) {
+                                                                // Display as finished
+                                                                echo "<td class='p-3 border-b text-center'>
+                                                                        <span class='px-3 py-1 rounded bg-gray-200 text-gray-500 text-sm'>
+                                                                            Дууссан
+                                                                        </span>
+                                                                    </td>";
+                                                            } 
+                                                            // FIXED: Check if the slot is already booked
+                                                            elseif ($status == 'Booked') {
+                                                                // Display as booked
+                                                                echo "<td class='p-3 border-b text-center'>
+                                                                        <span class='px-3 py-1 rounded bg-red-100 text-red-700 text-sm'>
+                                                                            Захиалагдсан
+                                                                        </span>
+                                                                    </td>";
+                                                            } 
+                                                            // Available slot
+                                                            else {
+                                                                echo "<td class='p-3 border-b text-center'>
+                                                                        <label class='inline-flex items-center cursor-pointer'>
+                                                                            <input type='checkbox' 
+                                                                                name='selected_slots[]' 
+                                                                                value='$slot_id' 
+                                                                                class='slot-checkbox hidden'
+                                                                                onchange='updateSlotSelection(this, $price)'>
+                                                                            <span class='slot-label px-3 py-1 rounded 
+                                                                                        hover:bg-blue-100 
+                                                                                        transition duration-200 
+                                                                                        text-sm font-medium'>
+                                                                                " . number_format($price) . " ₮
+                                                                            </span>
+                                                                        </label>
+                                                                    </td>";
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
 
-                                if (!$slot_found) {
-                                    echo "<td class='p-3 border-b text-center text-gray-400'>-</td>";
-                                }
-                            }
-                            echo "</tr>";
-                        }
-                        ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Rest of the code remains the same -->
+                                                    if (!$slot_found) {
+                                                        echo "<td class='p-3 border-b text-center text-gray-400'>-</td>";
+                                                    }
+                                                }
+                                                echo "</tr>";
+                                            }
+                                            ?>
+                                        </tbody>
+                                    </table>
+                                </div>
 
                                 <!-- Booking Summary -->
                                 <div class="mt-6 bg-white p-6 rounded-lg shadow-sm">
@@ -657,45 +665,45 @@ $isManagerViewingAsUser = isset($_SESSION['original_role']) && $_SESSION['origin
                             <div class="bg-yellow-50 p-6 rounded-lg text-center">
                                 <i class="fas fa-calendar-times text-yellow-600 text-4xl mb-4"></i>
                                 <p class="text-yellow-700 text-lg">Энэ танхимд одоогоор нээлттэй цаг байхгүй байна.</p>
-                                </div>
-                       <?php endif; ?>
-                   </div>
-               <?php endif; ?>
-           <?php endif; ?>
-       </div>
-   </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
 
-   <script>
-       function updateSlotSelection(checkbox, price) {
-           const totalHoursEl = document.getElementById('total-hours');
-           const totalCostEl = document.getElementById('total-cost');
-           
-           let totalHours = parseInt(totalHoursEl.textContent);
-           let totalCost = parseFloat(totalCostEl.textContent.replace(/,/g, ''));
-           
-           const label = checkbox.closest('td').querySelector('.slot-label');
-           
-           if (checkbox.checked) {
-               // Add slot
-               totalHours++;
-               totalCost += price;
-               label.classList.add('bg-blue-100', 'text-blue-800');
-           } else {
-               // Remove slot
-               totalHours--;
-               totalCost -= price;
-               label.classList.remove('bg-blue-100', 'text-blue-800');
-           }
-           totalHoursEl.textContent = totalHours;
-           totalCostEl.textContent = totalCost.toLocaleString();
-       }
-   </script>
+    <script>
+        function updateSlotSelection(checkbox, price) {
+            const totalHoursEl = document.getElementById('total-hours');
+            const totalCostEl = document.getElementById('total-cost');
+            
+            let totalHours = parseInt(totalHoursEl.textContent);
+            let totalCost = parseFloat(totalCostEl.textContent.replace(/,/g, ''));
+            
+            const label = checkbox.closest('td').querySelector('.slot-label');
+            
+            if (checkbox.checked) {
+                // Add slot
+                totalHours++;
+                totalCost += price;
+                label.classList.add('bg-blue-100', 'text-blue-800');
+            } else {
+                // Remove slot
+                totalHours--;
+                totalCost -= price;
+                label.classList.remove('bg-blue-100', 'text-blue-800');
+            }
+            totalHoursEl.textContent = totalHours;
+            totalCostEl.textContent = totalCost.toLocaleString();
+        }
+    </script>
 </body>
 </html>
 
 <?php 
 // Clean up database resources
 if (isset($conn)) {
-   $conn->close();
+    $conn->close();
 }
 ?>
